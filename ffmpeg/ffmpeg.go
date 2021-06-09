@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/floostack/transcoder"
-	"github.com/floostack/transcoder/utils"
+	"github.com/admpub/transcoder"
+	"github.com/admpub/transcoder/utils"
 )
 
 // Transcoder ...
@@ -50,9 +50,14 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	}
 
 	// Get file metadata
-	_, err := t.GetMetadata()
+	metadata, err := t.GetMetadata()
 	if err != nil {
 		return nil, err
+	}
+	if t.config.OnMetadata != nil {
+		if err := t.config.OnMetadata(metadata); err != nil {
+			return nil, err
+		}
 	}
 
 	// Append input file and standard options
@@ -83,6 +88,8 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 
 	// Initialize command
 	cmd := exec.Command(t.config.FfmpegBinPath, args...)
+	cmd.Env = append(t.config.Env, os.Environ()...)
+	cmd.Dir = t.config.Dir
 
 	// If progresss enabled, get stderr pipe and start progress process
 	if t.config.ProgressEnabled && !t.config.Verbose {
@@ -192,7 +199,7 @@ func (t *Transcoder) validate() error {
 }
 
 // GetMetadata Returns metadata for the specified input file
-func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
+func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 
 	if t.config.FfprobeBinPath != "" {
 		var outb, errb bytes.Buffer
@@ -208,6 +215,8 @@ func (t *Transcoder) GetMetadata() ( transcoder.Metadata, error) {
 		cmd := exec.Command(t.config.FfprobeBinPath, args...)
 		cmd.Stdout = &outb
 		cmd.Stderr = &errb
+		cmd.Env = append(t.config.Env, os.Environ()...)
+		cmd.Dir = t.config.Dir
 
 		err := cmd.Run()
 		if err != nil {
