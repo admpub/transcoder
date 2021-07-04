@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -24,10 +25,10 @@ type Transcoder struct {
 	output           []string
 	options          [][]string
 	metadata         transcoder.Metadata
-	inputPipeReader  *io.ReadCloser
-	outputPipeReader *io.ReadCloser
-	inputPipeWriter  *io.WriteCloser
-	outputPipeWriter *io.WriteCloser
+	inputPipeReader  io.ReadCloser
+	outputPipeReader io.ReadCloser
+	inputPipeWriter  io.WriteCloser
+	outputPipeWriter io.WriteCloser
 }
 
 // New ...
@@ -39,8 +40,6 @@ func New(cfg *Config) transcoder.Transcoder {
 func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress, error) {
 
 	var stderrIn io.ReadCloser
-
-	out := make(chan transcoder.Progress)
 
 	defer t.closePipes()
 
@@ -95,7 +94,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	if t.config.ProgressEnabled && !t.config.Verbose {
 		stderrIn, err = cmd.StderrPipe()
 		if err != nil {
-			return nil, fmt.Errorf("Failed getting transcoding progress (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+			return nil, fmt.Errorf("failed getting transcoding progress (%s) with args (%s) with error %w", t.config.FfmpegBinPath, args, err)
 		}
 	}
 
@@ -106,9 +105,10 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	// Start process
 	err = cmd.Start()
 	if err != nil {
-		return nil, fmt.Errorf("Failed starting transcoding (%s) with args (%s) with error %s", t.config.FfmpegBinPath, args, err)
+		return nil, fmt.Errorf("failed starting transcoding (%s) with args (%s) with error %w", t.config.FfmpegBinPath, args, err)
 	}
 
+	out := make(chan transcoder.Progress)
 	if t.config.ProgressEnabled && !t.config.Verbose {
 		go func() {
 			t.progress(stderrIn, out)
@@ -117,12 +117,18 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 		go func() {
 			defer close(out)
 			err = cmd.Wait()
+			if err != nil {
+				log.Printf("failed to transcoding (%s) with args (%s) with error %v", t.config.FfmpegBinPath, args, err)
+			}
 		}()
 	} else {
 		err = cmd.Wait()
+		if err != nil {
+			return nil, fmt.Errorf("failed to transcoding (%s) with args (%s) with error %w", t.config.FfmpegBinPath, args, err)
+		}
 	}
 
-	return out, nil
+	return out, err
 }
 
 // Input ...
@@ -138,8 +144,8 @@ func (t *Transcoder) Output(arg string) transcoder.Transcoder {
 }
 
 // InputPipe ...
-func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.Transcoder {
-	if &t.input == nil {
+func (t *Transcoder) InputPipe(w io.WriteCloser, r io.ReadCloser) transcoder.Transcoder {
+	if len(t.input) == 0 {
 		t.inputPipeWriter = w
 		t.inputPipeReader = r
 	}
@@ -147,8 +153,8 @@ func (t *Transcoder) InputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.T
 }
 
 // OutputPipe ...
-func (t *Transcoder) OutputPipe(w *io.WriteCloser, r *io.ReadCloser) transcoder.Transcoder {
-	if &t.output == nil {
+func (t *Transcoder) OutputPipe(w io.WriteCloser, r io.ReadCloser) transcoder.Transcoder {
+	if len(t.output) == 0 {
 		t.outputPipeWriter = w
 		t.outputPipeReader = r
 	}
@@ -201,7 +207,7 @@ func (t *Transcoder) validate() error {
 // GetMetadata Returns metadata for the specified input file
 func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 
-	if t.config.FfprobeBinPath != "" {
+	if len(t.config.FfprobeBinPath) > 0 {
 		var outb, errb bytes.Buffer
 
 		input := t.input
@@ -225,7 +231,7 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 
 		var metadata Metadata
 
-		if err = json.Unmarshal([]byte(outb.String()), &metadata); err != nil {
+		if err = json.Unmarshal(outb.Bytes(), &metadata); err != nil {
 			return nil, err
 		}
 
@@ -326,12 +332,10 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 // closePipes Closes pipes if opened
 func (t *Transcoder) closePipes() {
 	if t.inputPipeReader != nil {
-		ipr := *t.inputPipeReader
-		ipr.Close()
+		t.inputPipeReader.Close()
 	}
 
 	if t.outputPipeWriter != nil {
-		opr := *t.outputPipeWriter
-		opr.Close()
+		t.outputPipeWriter.Close()
 	}
 }
