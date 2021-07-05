@@ -77,34 +77,39 @@ func (opts Options) GetStrArguments() []string {
 
 	for i := 0; i < f.NumField(); i++ {
 		flag := f.Field(i).Tag.Get("flag")
-		value := v.Field(i).Interface()
+		rv := v.Field(i)
+		value := rv.Interface()
 
-		if !v.Field(i).IsNil() {
+		if !rv.IsNil() {
 
 			if _, ok := value.(*bool); ok {
 				values = append(values, flag)
+				continue
 			}
 
 			if vs, ok := value.(*string); ok {
 				values = append(values, flag, *vs)
+				continue
 			}
 
 			if va, ok := value.([]string); ok {
-
 				for i := 0; i < len(va); i++ {
 					item := va[i]
 					values = append(values, flag, item)
 				}
+				continue
 			}
 
 			if vm, ok := value.(map[string]interface{}); ok {
 				for k, v := range vm {
 					values = append(values, k, fmt.Sprintf("%v", v))
 				}
+				continue
 			}
-			
+
 			if vi, ok := value.(*int); ok {
 				values = append(values, flag, fmt.Sprintf("%d", *vi))
+				continue
 			}
 
 		}

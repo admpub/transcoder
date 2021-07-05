@@ -23,7 +23,7 @@ type Transcoder struct {
 	config           *Config
 	input            string
 	output           []string
-	options          [][]string
+	options          []transcoder.Options
 	metadata         transcoder.Metadata
 	inputPipeReader  io.ReadCloser
 	outputPipeReader io.ReadCloser
@@ -68,16 +68,20 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 		// Just append the 1 output file we've got
 		args = append(args, t.output[0])
 	} else {
+		arguments := make([][]string, len(t.options))
+		for i, o := range t.options {
+			arguments[i] = o.GetStrArguments()
+		}
 		for index, out := range t.output {
 			// Get executable flags
 			// If we are at the last output file but still have several options, append them all at once
 			if index == outputLength-1 && outputLength < optionsLength {
 				for i := index; i < len(t.options); i++ {
-					args = append(args, t.options[i]...)
+					args = append(args, arguments[i]...)
 				}
 				// Otherwise just append the current options
 			} else {
-				args = append(args, t.options[index]...)
+				args = append(args, arguments[index]...)
 			}
 
 			// Append output flag
@@ -163,13 +167,13 @@ func (t *Transcoder) OutputPipe(w io.WriteCloser, r io.ReadCloser) transcoder.Tr
 
 // WithOptions Sets the options object
 func (t *Transcoder) WithOptions(opts transcoder.Options) transcoder.Transcoder {
-	t.options = [][]string{opts.GetStrArguments()}
+	t.options = []transcoder.Options{opts}
 	return t
 }
 
 // WithAdditionalOptions Appends an additional options object
 func (t *Transcoder) WithAdditionalOptions(opts transcoder.Options) transcoder.Transcoder {
-	t.options = append(t.options, opts.GetStrArguments())
+	t.options = append(t.options, opts)
 	return t
 }
 
