@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ type Transcoder struct {
 	outputPipeReader io.ReadCloser
 	inputPipeWriter  io.WriteCloser
 	outputPipeWriter io.WriteCloser
+	commandContext   context.Context
 }
 
 // New ...
@@ -90,7 +92,15 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	}
 
 	// Initialize command
-	cmd := exec.Command(t.config.FfmpegBinPath, args...)
+	// If a context object was supplied to this Transcoder before
+	// starting, use this context when creating the command to allow
+	// the command to be killed when the context expires
+	var cmd *exec.Cmd
+	if t.commandContext == nil {
+		cmd = exec.Command(t.config.FfmpegBinPath, args...)
+	} else {
+		cmd = exec.CommandContext(t.commandContext, t.config.FfmpegBinPath, args...)
+	}
 	cmd.Env = append(t.config.Env, os.Environ()...)
 	cmd.Dir = t.config.Dir
 
@@ -177,6 +187,14 @@ func (t *Transcoder) WithAdditionalOptions(opts transcoder.Options) transcoder.T
 	return t
 }
 
+// WithContext is to be used on a Transcoder *before Starting* to
+// pass in a context.Context object that can be used to kill
+// a running transcoder process. Usage of this method is optional
+func (t *Transcoder) WithContext(ctx context.Context) transcoder.Transcoder {
+	t.commandContext = ctx
+	return t
+}
+
 // validate ...
 func (t *Transcoder) validate() error {
 	if t.config.FfmpegBinPath == "" {
@@ -222,7 +240,12 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 
 		args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
 
-		cmd := exec.Command(t.config.FfprobeBinPath, args...)
+		var cmd *exec.Cmd
+		if t.commandContext == nil {
+			cmd = exec.Command(t.config.FfprobeBinPath, args...)
+		} else {
+			cmd = exec.CommandContext(t.commandContext, t.config.FfprobeBinPath, args...)
+		}
 		cmd.Stdout = &outb
 		cmd.Stderr = &errb
 		cmd.Env = append(t.config.Env, os.Environ()...)
