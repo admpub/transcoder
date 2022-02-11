@@ -132,7 +132,9 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 			defer close(out)
 			err = cmd.Wait()
 			if err != nil {
-				log.Printf("failed to transcoding (%s) with args (%s) with error %v", t.config.FfmpegBinPath, args, err)
+				err = fmt.Errorf("failed to transcoding (%s) with args (%s) with error %w", t.config.FfmpegBinPath, args, err)
+				log.Println(err)
+				out <- &Progress{Error: err}
 			}
 		}()
 	} else {
