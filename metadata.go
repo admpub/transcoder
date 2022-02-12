@@ -52,7 +52,7 @@ type Streams interface {
 	GetDisposition() Disposition
 	GetBitRate() string
 	GetTags() map[string]string
-	GetSideDataList() []map[string]string
+	GetSideDataList() []map[string]interface{}
 }
 
 // Tags ...
