@@ -240,7 +240,14 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 			input = "pipe:"
 		}
 
-		args := []string{"-i", input, "-print_format", "json", "-show_format", "-show_streams", "-show_error"}
+		args := []string{
+			"-i", input,
+			"-print_format", "json",
+			"-show_entries", "stream=:stream_tags=rotate",
+			"-show_format",
+			"-show_streams",
+			"-show_error",
+		}
 
 		var cmd *exec.Cmd
 		if t.commandContext == nil {
@@ -263,41 +270,7 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 		if err = json.Unmarshal(outb.Bytes(), &metadata); err != nil {
 			return nil, err
 		}
-		metadata.Infos = map[string]string{}
-		reader := bufio.NewReader(&errb)
-		var prefix string
-		var hasMetadata bool
-		for {
-			byteLine, isPrefix, err := reader.ReadLine()
-			if err != nil && err != io.EOF {
-				return metadata, err
-			}
-			line := string(byteLine)
-			if isPrefix {
-				prefix += line
-				continue
-			}
-			line = prefix + line
-			line = strings.TrimLeft(line, ` `)
-			if !hasMetadata {
-				if strings.HasPrefix(line, `Metadata:`) {
-					hasMetadata = true
-				}
-			} else {
-				parts := strings.SplitN(line, `:`, 2)
-				if len(parts) == 2 {
-					parts[0] = strings.TrimRight(parts[0], ` `)
-					if len(parts[0]) > 0 && parts[0] != `Metadata:` {
-						parts[1] = strings.TrimSpace(parts[1])
-						metadata.Infos[parts[0]] = parts[1]
-					}
-				}
-			}
-			prefix = ""
-			if err == io.EOF {
-				break
-			}
-		}
+
 		t.metadata = metadata
 
 		return metadata, nil
