@@ -4,8 +4,9 @@ import "github.com/admpub/transcoder"
 
 // Metadata ...
 type Metadata struct {
-	Format  Format    `json:"format"`
-	Streams []Streams `json:"streams"`
+	Format  Format            `json:"format"`
+	Streams []Streams         `json:"streams"`
+	Infos   map[string]string `json:"infos"`
 }
 
 // Format ...
