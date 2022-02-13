@@ -283,6 +283,8 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 	return nil, errors.New("ffprobe binary not found")
 }
 
+var reEQ = regexp.MustCompile(`=\s+`)
+
 // progress sends through given channel the transcoding status
 func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress) {
 
@@ -318,11 +320,8 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 		line := scanner.Text()
 
 		if strings.Contains(line, "time=") && strings.Contains(line, "bitrate=") {
-			var re = regexp.MustCompile(`=\s+`)
-			st := re.ReplaceAllString(line, `=`)
-
+			st := reEQ.ReplaceAllString(line, `=`)
 			f := strings.Fields(st)
-
 			var framesProcessed string
 			var currentTime string
 			var currentBitrate string
