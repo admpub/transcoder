@@ -124,8 +124,11 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 
 	out := make(chan transcoder.Progress)
 	if t.config.ProgressEnabled && !t.config.Verbose {
+		done := make(chan struct{})
 		go func() {
 			t.progress(stderrIn, out)
+			done <- struct{}{}
+			close(done)
 		}()
 
 		go func() {
@@ -136,6 +139,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 				log.Println(err)
 				out <- &Progress{Error: err}
 			}
+			<-done
 		}()
 	} else {
 		err = cmd.Wait()
