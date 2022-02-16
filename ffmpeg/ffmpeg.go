@@ -135,8 +135,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 			defer close(out)
 			err = cmd.Wait()
 			if err != nil {
-				b, _ := io.ReadAll(io.LimitReader(stderrIn, 100))
-				err = fmt.Errorf("failed to transcoding (%s) with args (%s) with error %w: %s", t.config.FfmpegBinPath, args, err, string(b))
+				err = fmt.Errorf("failed to transcoding (%s) with args (%s) with error %w", t.config.FfmpegBinPath, args, err)
 				log.Println(err)
 				out <- &Progress{Error: err}
 			}
@@ -145,8 +144,7 @@ func (t *Transcoder) Start(opts transcoder.Options) (<-chan transcoder.Progress,
 	} else {
 		err = cmd.Wait()
 		if err != nil {
-			b, _ := io.ReadAll(io.LimitReader(stderrIn, 100))
-			return nil, fmt.Errorf("failed to transcoding (%s) with args (%s) with error %w: %s", t.config.FfmpegBinPath, args, err, string(b))
+			return nil, fmt.Errorf("failed to transcoding (%s) with args (%s) with error %w", t.config.FfmpegBinPath, args, err)
 		}
 	}
 
@@ -286,6 +284,8 @@ func (t *Transcoder) GetMetadata() (transcoder.Metadata, error) {
 }
 
 var reEQ = regexp.MustCompile(`=\s+`)
+var mgError = `Error `
+var mgFailed = `Conversion failed!`
 
 // progress sends through given channel the transcoding status
 func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress) {
@@ -317,11 +317,18 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 	buf := make([]byte, 2)
 	scanner.Buffer(buf, bufio.MaxScanTokenSize)
 
+	var isFailed bool
+	var errMessages []string
+
 	for scanner.Scan() {
 		Progress := new(Progress)
 		line := scanner.Text()
-
-		if strings.Contains(line, "time=") && strings.Contains(line, "bitrate=") {
+		//println(`========>`, `[`+line+`]`)
+		if strings.HasPrefix(line, mgError) {
+			errMessages = append(errMessages, line)
+		} else if strings.HasPrefix(line, mgFailed) {
+			isFailed = true
+		} else if strings.Contains(line, "time=") && strings.Contains(line, "bitrate=") {
 			st := reEQ.ReplaceAllString(line, `=`)
 			f := strings.Fields(st)
 			var framesProcessed string
@@ -367,6 +374,9 @@ func (t *Transcoder) progress(stream io.ReadCloser, out chan transcoder.Progress
 
 			out <- *Progress
 		}
+	}
+	if isFailed && len(errMessages) > 0 {
+		out <- &Progress{Error: errors.New(strings.Join(errMessages, "\n"))}
 	}
 }
 
